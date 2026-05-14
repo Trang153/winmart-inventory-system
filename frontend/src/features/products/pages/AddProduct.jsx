@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { appRoutes } from "../../../app/routes";
+import AppSidebar from "../../../components/AppSidebar";
+import RoleAvatar from "../../../components/RoleAvatar";
 import { getSuppliers } from "../../../services/supplier/supplierService";
 import {
   createProduct,
@@ -8,6 +10,7 @@ import {
   updateProduct,
   uploadProductImage,
 } from "../../../services/product/productService";
+import { isAdmin } from "../../../auth/rbac";
 
 const navItems = [
   { label: "Dashboard", icon: "#", page: "dashboard" },
@@ -16,7 +19,6 @@ const navItems = [
   { label: "Inventory", icon: "[]", page: "inventory" },
   { label: "Orders", icon: "U", page: "orders" },
   { label: "Reports", icon: "|", page: "reports" },
-  { label: "Rating", icon: "/", page: "rating" },
 ];
 
 const categoryOptions = ["Snacks", "Dairy", "Drinks", "Frozen Food", "Household"];
@@ -25,7 +27,7 @@ const styles = {
   page: {
     minHeight: "100vh",
     display: "grid",
-    gridTemplateColumns: "320px 1fr",
+    gridTemplateColumns: "322px 1fr",
     background: "#f5f7fb",
     color: "#1f2937",
     fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
@@ -294,11 +296,13 @@ const styles = {
   },
 };
 
-function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout = () => {} }) {
+function AddProduct({ currentPage = "products", currentUser = null, onNavigate = () => {}, onLogout = () => {} }) {
   const fileInputRef = useRef(null);
   const [searchParams] = useSearchParams();
   const productId = searchParams.get("id");
   const isDetailMode = Boolean(productId);
+  const canManageProducts = isAdmin(currentUser);
+  const isReadOnly = !canManageProducts;
   const [status, setStatus] = useState("active");
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
@@ -406,6 +410,10 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
   })();
 
   async function handleImageChange(event) {
+    if (isReadOnly) {
+      return;
+    }
+
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -428,6 +436,10 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
   }
 
   async function handleSubmitProduct() {
+    if (isReadOnly) {
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMessage("");
@@ -497,36 +509,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
       </style>
 
       <div className="add-product-page" style={styles.page}>
-        <aside style={styles.sidebar}>
-          <div style={styles.brand}>WinMart</div>
-
-          <nav style={styles.nav}>
-            {navItems.map((item) => (
-              <button
-                key={item.label}
-                style={{
-                  ...styles.navItem,
-                  ...(currentPage === item.page ? styles.navItemActive : null),
-                }}
-                onClick={() => item.page && onNavigate(item.page)}
-              >
-                <span style={styles.navIcon}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div style={styles.sidebarFooter}>
-            <button style={styles.navItem} onClick={() => onNavigate("settings")}>
-              <span style={styles.navIcon}>*</span>
-              <span>Settings</span>
-            </button>
-            <button type="button" style={{ ...styles.navItem, color: "#ef4335" }} onClick={onLogout}>
-              <span style={styles.navIcon}>-</span>
-              <span>Log Out</span>
-            </button>
-          </div>
-        </aside>
+        <AppSidebar currentPage={currentPage} currentUser={currentUser} onNavigate={onNavigate} onLogout={onLogout} />
 
         <main style={styles.main}>
           <header className="add-product-topbar" style={styles.topbar}>
@@ -537,7 +520,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
 
             <div style={styles.topActions}>
               <span style={{ fontSize: "24px" }}>!</span>
-              <div style={styles.avatar}>A</div>
+              <RoleAvatar currentUser={currentUser} style={styles.avatar} />
             </div>
           </header>
 
@@ -565,7 +548,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                       style={styles.input}
                       value={productName}
                       onChange={(event) => setProductName(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     />
                   </div>
 
@@ -594,7 +577,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                         value={category}
                         style={styles.select}
                         onChange={(event) => setCategory(event.target.value)}
-                        disabled={isLoadingDetail}
+                        disabled={isLoadingDetail || isReadOnly}
                       >
                         <option value="">Select category</option>
                         {categoryOptions.map((option) => (
@@ -615,7 +598,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                       value={supplierId}
                       style={styles.select}
                       onChange={(event) => setSupplierId(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     >
                       <option value="">Select supplier</option>
                       {suppliers.map((supplier) => (
@@ -628,7 +611,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                 </section>
 
                 <section style={styles.card}>
-                  <h2 style={styles.cardTitle}>$ Pricing & Business Information</h2>
+                  <h2 style={styles.cardTitle}>VND Pricing & Business Information</h2>
 
                   <div className="add-product-two-columns" style={styles.twoColumns}>
                     <div style={styles.fieldGroup}>
@@ -638,11 +621,11 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                       <input
                         id="buying-price"
                         type="text"
-                        placeholder="$ 0.00"
+                        placeholder="0 VND"
                         style={styles.input}
                         value={buyingPrice}
                         onChange={(event) => setBuyingPrice(event.target.value)}
-                        disabled={isLoadingDetail}
+                        disabled={isLoadingDetail || isReadOnly}
                       />
                     </div>
 
@@ -653,11 +636,11 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                       <input
                         id="selling-price"
                         type="text"
-                        placeholder="$ 0.00"
+                        placeholder="0 VND"
                         style={styles.input}
                         value={sellingPrice}
                         onChange={(event) => setSellingPrice(event.target.value)}
-                        disabled={isLoadingDetail}
+                        disabled={isLoadingDetail || isReadOnly}
                       />
                     </div>
                   </div>
@@ -675,7 +658,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                         style={styles.input}
                         value={discount}
                         onChange={(event) => setDiscount(event.target.value)}
-                        disabled={isLoadingDetail}
+                        disabled={isLoadingDetail || isReadOnly}
                       />
                     </div>
 
@@ -722,7 +705,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                           cursor: "pointer",
                         }}
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploadingImage || isLoadingDetail}
+                        disabled={isUploadingImage || isLoadingDetail || isReadOnly}
                       >
                         Browse image
                       </button>
@@ -732,7 +715,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                         accept="image/*"
                         style={{ display: "none" }}
                         onChange={handleImageChange}
-                        disabled={isUploadingImage || isLoadingDetail}
+                        disabled={isUploadingImage || isLoadingDetail || isReadOnly}
                       />
                       {imageUrl ? (
                         <div style={{ ...styles.helperText, marginTop: "10px", wordBreak: "break-all" }}>
@@ -755,7 +738,7 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                       value={status}
                       style={styles.select}
                       onChange={(event) => setStatus(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     >
                       <option value="active">Active (Visible)</option>
                       <option value="draft">Draft</option>
@@ -767,14 +750,16 @@ function AddProduct({ currentPage = "products", onNavigate = () => {}, onLogout 
                 {message ? <div style={styles.successText}>{message}</div> : null}
                 {errorMessage ? <div style={styles.errorText}>{errorMessage}</div> : null}
 
-                <button
-                  type="button"
-                  style={{ ...styles.actionButton, ...styles.primaryButton }}
-                  onClick={handleSubmitProduct}
-                  disabled={isSubmitting || isUploadingImage || isLoadingDetail}
-                >
-                  {isSubmitting ? "Saving..." : isDetailMode ? "Update Product" : "Add Product"}
-                </button>
+                {canManageProducts ? (
+                  <button
+                    type="button"
+                    style={{ ...styles.actionButton, ...styles.primaryButton }}
+                    onClick={handleSubmitProduct}
+                    disabled={isSubmitting || isUploadingImage || isLoadingDetail}
+                  >
+                    {isSubmitting ? "Saving..." : isDetailMode ? "Update Product" : "Add Product"}
+                  </button>
+                ) : null}
 
                 <button
                   type="button"

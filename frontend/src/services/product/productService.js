@@ -42,6 +42,24 @@ export async function updateProduct(id, payload) {
   return data.data;
 }
 
+export async function deleteProduct(id) {
+  const response = await apiRequest(`/api/products/${id}`, {
+    method: "DELETE",
+  });
+
+  return parseResponse(response, "Failed to delete product");
+}
+
+export async function updateProductStock(id, payload) {
+  const response = await apiRequest(`/api/products/${id}/stock`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  const data = await parseResponse(response, "Failed to update product stock");
+  return data.data;
+}
+
 export async function uploadProductImage(file) {
   const formData = new FormData();
   formData.append("image", file);

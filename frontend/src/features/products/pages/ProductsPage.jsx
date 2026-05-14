@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { appRoutes } from "../../../app/routes";
-import { getProducts } from "../../../services/product/productService";
+import { deleteProduct, getProducts } from "../../../services/product/productService";
+import AppSidebar from "../../../components/AppSidebar";
+import RoleAvatar from "../../../components/RoleAvatar";
+import { isAdmin } from "../../../auth/rbac";
 
 const navItems = [
   { label: "Dashboard", icon: "#", page: "dashboard" },
@@ -9,7 +12,6 @@ const navItems = [
   { label: "Inventory", icon: "[]", page: "inventory" },
   { label: "Orders", icon: "U", page: "orders" },
   { label: "Reports", icon: "|", page: "reports" },
-  { label: "Rating", icon: "/", page: "rating" },
 ];
 
 const styles = {
@@ -383,8 +385,8 @@ function getStatusStyle(tone) {
 function formatPrice(value) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
+    currency: "VND",
+    maximumFractionDigits: 0,
   }).format(Number(value || 0));
 }
 
@@ -416,9 +418,11 @@ function getProductInitials(productName) {
   );
 }
 
-function Product({ currentPage = "products", onNavigate = () => {}, onLogout = () => {} }) {
+function Product({ currentPage = "products", currentUser = null, onNavigate = () => {}, onLogout = () => {} }) {
   const [products, setProducts] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isDeletingId, setIsDeletingId] = useState(null);
+  const canManageProducts = isAdmin(currentUser);
 
   useEffect(() => {
     let isMounted = true;
@@ -439,11 +443,38 @@ function Product({ currentPage = "products", onNavigate = () => {}, onLogout = (
     }
 
     loadProducts();
+    const intervalId = window.setInterval(loadProducts, 10000);
 
     return () => {
       isMounted = false;
+      window.clearInterval(intervalId);
     };
   }, []);
+
+  async function handleDeleteProduct(product) {
+    if (!canManageProducts) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete product "${product.product_name}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsDeletingId(product.product_id);
+      setErrorMessage("");
+      await deleteProduct(product.product_id);
+      setProducts((currentProducts) =>
+        currentProducts.filter((currentProduct) => currentProduct.product_id !== product.product_id)
+      );
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to delete product");
+    } finally {
+      setIsDeletingId(null);
+    }
+  }
 
   return (
     <>
@@ -484,36 +515,7 @@ function Product({ currentPage = "products", onNavigate = () => {}, onLogout = (
       </style>
 
       <div className="product-page" style={styles.page}>
-        <aside style={styles.sidebar}>
-          <div style={styles.brand}>WinMart</div>
-
-          <nav style={styles.nav}>
-            {navItems.map((item) => (
-              <button
-                key={item.label}
-                style={{
-                  ...styles.navItem,
-                  ...(currentPage === item.page ? styles.navItemActive : null),
-                }}
-                onClick={() => item.page && onNavigate(item.page)}
-              >
-                <span style={styles.navIcon}>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div style={styles.sidebarFooter}>
-            <button style={styles.navItem} onClick={() => onNavigate("settings")}>
-              <span style={styles.navIcon}>*</span>
-              <span>Settings</span>
-            </button>
-            <button type="button" style={{ ...styles.navItem, color: "#ef4335" }} onClick={onLogout}>
-              <span style={styles.navIcon}>-</span>
-              <span>Log Out</span>
-            </button>
-          </div>
-        </aside>
+        <AppSidebar currentPage={currentPage} currentUser={currentUser} onNavigate={onNavigate} onLogout={onLogout} />
 
         <main style={styles.main}>
           <header className="product-topbar" style={styles.topbar}>
@@ -524,7 +526,7 @@ function Product({ currentPage = "products", onNavigate = () => {}, onLogout = (
 
             <div style={styles.topActions}>
               <span style={{ fontSize: "24px" }}>!</span>
-              <div style={styles.avatar}>A</div>
+              <RoleAvatar currentUser={currentUser} style={styles.avatar} />
             </div>
           </header>
 
@@ -540,10 +542,12 @@ function Product({ currentPage = "products", onNavigate = () => {}, onLogout = (
                   <span>T</span>
                   <span>Export</span>
                 </button>
-                <button type="button" style={styles.primaryButton} onClick={() => onNavigate(appRoutes.addProduct)}>
-                  <span>+</span>
-                  <span>Add Product</span>
-                </button>
+                {canManageProducts ? (
+                  <button type="button" style={styles.primaryButton} onClick={() => onNavigate(appRoutes.addProduct)}>
+                    <span>+</span>
+                    <span>Add Product</span>
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -608,7 +612,7 @@ function Product({ currentPage = "products", onNavigate = () => {}, onLogout = (
                           <td style={{ ...styles.bodyCell, ...styles.supplierLink }}>{product.supplier_name || "-"}</td>
                           <td style={styles.bodyCell}>{formatPrice(product.price)}</td>
                           <td style={styles.bodyCell}>{formatPrice(product.price)}</td>
-                          <td style={styles.bodyCell}>{product.price_stock || "-"}</td>
+                          <td style={styles.bodyCell}>{Number(product.inventory_quantity || 0)} pcs</td>
                           <td style={styles.bodyCell}>
                             <span style={getStatusStyle(tone)}>{getStatusLabel(product.price_stock)}</span>
                           </td>
@@ -619,8 +623,18 @@ function Product({ currentPage = "products", onNavigate = () => {}, onLogout = (
                                 style={styles.actionButton}
                                 onClick={() => onNavigate(`${appRoutes.addProduct}?id=${product.product_id}`)}
                               >
-                                View / Edit
+                                {canManageProducts ? "View / Edit" : "View"}
                               </button>
+                              {canManageProducts ? (
+                                <button
+                                  type="button"
+                                  style={{ ...styles.actionButton, color: "#ef4335" }}
+                                  onClick={() => handleDeleteProduct(product)}
+                                  disabled={isDeletingId === product.product_id}
+                                >
+                                  {isDeletingId === product.product_id ? "Deleting..." : "Delete"}
+                                </button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>

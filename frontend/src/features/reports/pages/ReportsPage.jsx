@@ -1,4 +1,8 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { getOrderReport } from "../../../services/order/orderService";
+import AppSidebar from "../../../components/AppSidebar";
+import RoleAvatar from "../../../components/RoleAvatar";
+import { getRoleName } from "../../../auth/rbac";
 
 const navItems = [
   { label: "Dashboard", icon: "#", page: "dashboard" },
@@ -7,36 +11,17 @@ const navItems = [
   { label: "Inventory", icon: "[]", page: "inventory" },
   { label: "Orders", icon: "U", page: "orders" },
   { label: "Reports", icon: "|", page: "reports" },
-  { label: "Rating", icon: "/", page: "rating" },
 ];
 
 const summaryCards = [
-  { title: "Total Revenue", value: "$124,563.00", note: "+12.5% from last month", icon: "$", tone: "green" },
-  { title: "Total Orders", value: "1,429", note: "+8.2% from last month", icon: "[]", tone: "green" },
-  { title: "Inventory Value", value: "$45,231.00", note: "+5.1% from last month", icon: "O", tone: "green" },
-  { title: "Low Stock Alerts", value: "14", note: "+3 from last month", icon: "!", tone: "red" },
+  { title: "Total Revenue", value: "0 VND", note: "Live from backend", icon: "VND", tone: "green" },
+  { title: "Total Orders", value: "0", note: "Live from backend", icon: "[]", tone: "green" },
+  { title: "Inventory Value", value: "0 VND", note: "Live from backend", icon: "O", tone: "green" },
+  { title: "Low Stock Alerts", value: "0", note: "Live from backend", icon: "!", tone: "red" },
 ];
 
-const monthlyRevenue = [15, 20, 18, 25, 30, 28, 35, 42, 38, 45, 50, 48];
+const monthlyRevenue = Array.from({ length: 12 }, () => 0);
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-const topProducts = [
-  { name: "Oreo Original 120g", sold: "2,410", revenue: "$6,025" },
-  { name: "Coca-Cola 330ml", sold: "1,980", revenue: "$4,752" },
-  { name: "Fresh Milk 1L", sold: "1,420", revenue: "$2,556" },
-];
-
-const inventoryReport = [
-  { category: "Snacks", value: "$18,430", items: "4,820", status: "Healthy" },
-  { category: "Drinks", value: "$14,200", items: "3,540", status: "Monitor" },
-  { category: "Dairy", value: "$12,601", items: "2,774", status: "Low" },
-];
-
-const salesReport = [
-  { channel: "In-store", orders: "842", revenue: "$58,420", trend: "+6.4%" },
-  { channel: "Online", orders: "391", revenue: "$42,610", trend: "+11.2%" },
-  { channel: "Wholesale", orders: "196", revenue: "$23,533", trend: "+4.8%" },
-];
 
 const styles = {
   page: { minHeight: "100vh", display: "grid", gridTemplateColumns: "322px 1fr", background: "#f5f7fb", fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif', color: "#1f2937" },
@@ -87,6 +72,9 @@ const styles = {
   monitor: { color: "#d97706", fontWeight: 700 },
   low: { color: "#ef4335", fontWeight: 700 },
   trend: { color: "#22a958", fontWeight: 700 },
+  statusText: { color: "#71829d", fontSize: "14px", marginTop: "6px" },
+  errorText: { color: "#ef4335", fontSize: "14px", fontWeight: 600, marginTop: "6px" },
+  emptyText: { color: "#71829d", fontSize: "14px", padding: "14px 0" },
 };
 
 function getCardTone(tone) {
@@ -103,7 +91,92 @@ function getCardTone(tone) {
   };
 }
 
-function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = () => {} }) {
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+function Reports({ currentPage = "reports", currentUser = null, onNavigate = () => {}, onLogout = () => {} }) {
+  const [report, setReport] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const roleName = getRoleName(currentUser).toLowerCase();
+  const isStaff = roleName === "staff";
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadReport() {
+      try {
+        const data = await getOrderReport();
+
+        if (isMounted) {
+          setReport(data);
+          setErrorMessage("");
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(error.message || "Failed to load report");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadReport();
+    const intervalId = window.setInterval(loadReport, 5000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const displaySummaryCards = useMemo(() => {
+    if (!report) {
+      return summaryCards;
+    }
+
+    return [
+      { ...summaryCards[0], value: formatCurrency(report.summary?.total_revenue) },
+      { ...summaryCards[1], value: String(report.summary?.total_orders || 0) },
+      { ...summaryCards[2], value: formatCurrency(report.summary?.inventory_value) },
+      { ...summaryCards[3], value: String(report.summary?.low_stock_count || 0) },
+    ];
+  }, [report]);
+  const displayMonthlyRevenue = report?.monthly_revenue?.length ? report.monthly_revenue : monthlyRevenue;
+  const maxMonthlyRevenue = Math.max(...displayMonthlyRevenue, 1);
+  const displayTopProducts = report?.top_products?.length
+    ? report.top_products.map((item) => ({
+        name: item.name,
+        sold: new Intl.NumberFormat("en-US").format(item.sold),
+        revenue: formatCurrency(item.revenue),
+      }))
+    : [];
+  const displayInventoryReport = report?.inventory_by_category?.length
+    ? report.inventory_by_category.map((item) => ({
+        category: item.category,
+        value: formatCurrency(item.value),
+        items: new Intl.NumberFormat("en-US").format(item.items),
+        status: item.status,
+      }))
+    : [];
+  const displaySalesReport = report?.sales_report?.length
+    ? report.sales_report.map((item) => ({
+        channel: item.channel,
+        orders: new Intl.NumberFormat("en-US").format(item.orders),
+        revenue: formatCurrency(item.revenue),
+      }))
+    : [];
+  const updatedAt = report?.updated_at
+    ? new Date(report.updated_at).toLocaleString("en-US")
+    : "";
+
   return (
     <>
       <style>
@@ -143,30 +216,7 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
       </style>
 
       <div className="reports-page" style={styles.page}>
-        <aside style={styles.sidebar}>
-          <div style={styles.brand}>WinMart</div>
-
-          <nav style={styles.nav}>
-            {navItems.map((item) => (
-              <button
-                key={item.label}
-                style={{
-                  ...styles.navItem,
-                  ...(currentPage === item.page ? styles.navItemActive : null),
-                }}
-                onClick={() => item.page && onNavigate(item.page)}
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div style={styles.sidebarFooter}>
-            <button style={styles.navItem} onClick={() => onNavigate("settings")}>Settings</button>
-            <button type="button" style={{ ...styles.navItem, color: "#ef4335" }} onClick={onLogout}>Log Out</button>
-          </div>
-        </aside>
+        <AppSidebar currentPage={currentPage} currentUser={currentUser} onNavigate={onNavigate} onLogout={onLogout} />
 
         <main style={styles.main}>
           <header className="reports-topbar" style={styles.topbar}>
@@ -177,13 +227,21 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
 
             <div style={styles.topActions}>
               <span style={{ fontSize: "24px" }}>!</span>
-              <div style={styles.avatar}>A</div>
+              <RoleAvatar currentUser={currentUser} style={styles.avatar} />
             </div>
           </header>
 
           <div style={styles.content}>
             <div className="reports-header" style={styles.headerRow}>
-              <h1 style={styles.title}>Reports & Analytics</h1>
+              <div>
+                <h1 style={styles.title}>Reports & Analytics</h1>
+                <div style={styles.statusText}>
+                  {isStaff ? "Staff report" : "Admin report"}
+                  {updatedAt ? ` - Updated ${updatedAt}` : ""}
+                  {isLoading ? " - Loading..." : ""}
+                </div>
+                {errorMessage ? <div style={styles.errorText}>{errorMessage}</div> : null}
+              </div>
 
               <div style={styles.headerActions}>
                 <button type="button" style={styles.secondaryButton}>
@@ -198,7 +256,7 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
             </div>
 
             <div className="reports-cards" style={styles.cardsGrid}>
-              {summaryCards.map((card) => {
+              {displaySummaryCards.map((card) => {
                 const tone = getCardTone(card.tone);
                 return (
                   <div key={card.title} style={styles.card}>
@@ -228,8 +286,8 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
 
                 <div style={styles.barsWrap}>
                   <div style={styles.topNumbers}>
-                    {monthlyRevenue.map((value, index) => (
-                      <span key={`top-${months[index]}`}>{value}k</span>
+                    {displayMonthlyRevenue.map((value, index) => (
+                      <span key={`top-${months[index]}`}>{formatCurrency(value)}</span>
                     ))}
                   </div>
 
@@ -240,9 +298,9 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
                   </div>
 
                   <div style={styles.bars}>
-                    {monthlyRevenue.map((value, index) => (
+                    {displayMonthlyRevenue.map((value, index) => (
                       <div key={months[index]} style={styles.barItem}>
-                        <div style={{ ...styles.bar, height: `${(value / 50) * 100}%` }} />
+                        <div style={{ ...styles.bar, height: `${(Number(value || 0) / maxMonthlyRevenue) * 100}%` }} />
                         <span style={styles.month}>{months[index]}</span>
                       </div>
                     ))}
@@ -255,7 +313,7 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
               <section style={styles.miniCard}>
                 <div style={styles.miniHeader}>Các sản phẩm bán chạy</div>
                 <div style={styles.miniBody}>
-                  {topProducts.map((item) => (
+                  {displayTopProducts.map((item) => (
                     <div key={item.name} style={styles.listItem}>
                       <span style={styles.primaryText}>{item.name}</span>
                       <span style={styles.secondaryText}>
@@ -263,13 +321,14 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
                       </span>
                     </div>
                   ))}
+                  {!displayTopProducts.length ? <div style={styles.emptyText}>No sales data found.</div> : null}
                 </div>
               </section>
 
               <section style={styles.miniCard}>
                 <div style={styles.miniHeader}>Báo cáo tồn kho</div>
                 <div style={styles.miniBody}>
-                  {inventoryReport.map((item) => (
+                  {displayInventoryReport.map((item) => (
                     <div key={item.category} style={styles.row}>
                       <div>
                         <div style={styles.primaryText}>{item.category}</div>
@@ -290,13 +349,14 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
                       </span>
                     </div>
                   ))}
+                  {!displayInventoryReport.length ? <div style={styles.emptyText}>No inventory data found.</div> : null}
                 </div>
               </section>
 
               <section style={styles.miniCard}>
                 <div style={styles.miniHeader}>Báo cáo bán hàng</div>
                 <div style={styles.miniBody}>
-                  {salesReport.map((item) => (
+                  {displaySalesReport.map((item) => (
                     <div key={item.channel} style={styles.row}>
                       <div>
                         <div style={styles.primaryText}>{item.channel}</div>
@@ -304,9 +364,10 @@ function Reports({ currentPage = "reports", onNavigate = () => {}, onLogout = ()
                           {item.orders} đơn • {item.revenue}
                         </div>
                       </div>
-                      <span style={styles.trend}>{item.trend}</span>
+                      <span style={styles.trend}>Live</span>
                     </div>
                   ))}
+                  {!displaySalesReport.length ? <div style={styles.emptyText}>No order status data found.</div> : null}
                 </div>
               </section>
             </div>

@@ -7,9 +7,10 @@ export const appRoutes = {
   addProduct: "/products/new",
   inventory: "/inventory",
   orders: "/orders",
+  procurement: "/procurement",
   reports: "/reports",
-  rating: "/rating",
   settings: "/settings",
+  users: "/admin/users",
 };
 
 export const pageRouteMap = {
@@ -18,7 +19,8 @@ export const pageRouteMap = {
   products: appRoutes.products,
   inventory: appRoutes.inventory,
   orders: appRoutes.orders,
+  procurement: appRoutes.procurement,
   reports: appRoutes.reports,
-  rating: appRoutes.rating,
   settings: appRoutes.settings,
+  users: appRoutes.users,
 };

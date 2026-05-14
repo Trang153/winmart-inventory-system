@@ -145,10 +145,42 @@ async function deleteProduct(req, res) {
   }
 }
 
+async function adjustProductStock(req, res) {
+  const { quantity, mode } = req.body;
+
+  try {
+    const product = await productService.adjustProductStock(req.params.id, {
+      quantity,
+      mode,
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Product stock updated successfully",
+      data: product,
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || "Failed to update product stock",
+    });
+  }
+}
+
 module.exports = {
   getAllProducts,
   getProductById,
   createProduct,
   updateProduct,
   deleteProduct,
+  adjustProductStock,
 };

@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { appRoutes } from "../../../app/routes";
-import { getSuppliers } from "../../../services/supplier/supplierService";
+import { deleteSupplier, getSuppliers } from "../../../services/supplier/supplierService";
+import AppSidebar from "../../../components/AppSidebar";
+import RoleAvatar from "../../../components/RoleAvatar";
+import { isAdmin } from "../../../auth/rbac";
 
 const navItems = [
   { page: "dashboard", label: "Dashboard", icon: "⌂" },
@@ -9,14 +12,13 @@ const navItems = [
   { page: "inventory", label: "Inventory", icon: "◉" },
   { page: "orders", label: "Orders", icon: "▤" },
   { page: "reports", label: "Reports", icon: "▥" },
-  { page: "rating", label: "Rating", icon: "↑" },
 ];
 
 const styles = {
   page: {
     minHeight: "100vh",
     display: "grid",
-    gridTemplateColumns: "274px 1fr",
+    gridTemplateColumns: "322px 1fr",
     background: "#eef2f7",
     color: "#3f4a5e",
     fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
@@ -191,6 +193,21 @@ const styles = {
     fontSize: "14px",
     cursor: "pointer",
   },
+  actionGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap",
+  },
+  deleteAction: {
+    color: "#dc2626",
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    fontSize: "14px",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
   footer: {
     display: "grid",
     gridTemplateColumns: "1fr auto 1fr",
@@ -286,15 +303,29 @@ function Sidebar({ currentPage, onNavigate, onLogout }) {
   );
 }
 
-function Supplier({ currentPage = "suppliers", onNavigate = () => {}, onLogout = () => {} }) {
+function Supplier({ currentPage = "suppliers", currentUser = null, onNavigate = () => {}, onLogout = () => {} }) {
   const [supplierRows, setSupplierRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const canManageSuppliers = isAdmin(currentUser);
+
+  async function loadSuppliers() {
+    try {
+      setIsLoading(true);
+      setErrorMessage("");
+      const suppliers = await getSuppliers();
+      setSupplierRows(suppliers);
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to load suppliers");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadSuppliers() {
+    async function loadInitialSuppliers() {
       try {
         setIsLoading(true);
         setErrorMessage("");
@@ -314,16 +345,36 @@ function Supplier({ currentPage = "suppliers", onNavigate = () => {}, onLogout =
       }
     }
 
-    loadSuppliers();
+    loadInitialSuppliers();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
+  async function handleDeleteSupplier(supplier) {
+    if (!canManageSuppliers) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete supplier "${supplier.supplier_name}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setErrorMessage("");
+      await deleteSupplier(supplier.supplier_id);
+      await loadSuppliers();
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to delete supplier");
+    }
+  }
+
   return (
     <div style={styles.page}>
-      <Sidebar currentPage={currentPage} onNavigate={onNavigate} onLogout={onLogout} />
+      <AppSidebar currentPage={currentPage} currentUser={currentUser} onNavigate={onNavigate} onLogout={onLogout} />
 
       <main style={styles.main}>
         <header style={styles.topbar}>
@@ -334,7 +385,7 @@ function Supplier({ currentPage = "suppliers", onNavigate = () => {}, onLogout =
 
           <div style={styles.topbarRight}>
             <span style={styles.bell}>◔</span>
-            <div style={styles.avatar} />
+            <RoleAvatar currentUser={currentUser} style={styles.avatar} />
           </div>
         </header>
 
@@ -344,9 +395,11 @@ function Supplier({ currentPage = "suppliers", onNavigate = () => {}, onLogout =
               <h1 style={styles.title}>Supplier</h1>
 
               <div style={styles.actions}>
-                <button type="button" style={styles.primaryButton} onClick={() => onNavigate(appRoutes.addSupplier)}>
-                  New Supplier
-                </button>
+                {canManageSuppliers ? (
+                  <button type="button" style={styles.primaryButton} onClick={() => onNavigate(appRoutes.addSupplier)}>
+                    New Supplier
+                  </button>
+                ) : null}
                 <button type="button" style={styles.secondaryButton}>
                   ⌁ Filters
                 </button>
@@ -418,13 +471,24 @@ function Supplier({ currentPage = "suppliers", onNavigate = () => {}, onLogout =
                           : "-"}
                       </td>
                       <td style={styles.td}>
-                        <button
-                          type="button"
-                          style={styles.actionLink}
-                          onClick={() => onNavigate(`${appRoutes.addSupplier}?id=${supplier.supplier_id}`)}
-                        >
-                          View / Edit
-                        </button>
+                        <div style={styles.actionGroup}>
+                          <button
+                            type="button"
+                            style={styles.actionLink}
+                            onClick={() => onNavigate(`${appRoutes.addSupplier}?id=${supplier.supplier_id}`)}
+                          >
+                            {canManageSuppliers ? "View / Edit" : "View"}
+                          </button>
+                          {canManageSuppliers ? (
+                            <button
+                              type="button"
+                              style={styles.deleteAction}
+                              onClick={() => handleDeleteSupplier(supplier)}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))}

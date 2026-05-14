@@ -42,6 +42,14 @@ export async function updateSupplier(id, payload) {
   return data.data;
 }
 
+export async function deleteSupplier(id) {
+  const response = await apiRequest(`/api/suppliers/${id}`, {
+    method: "DELETE",
+  });
+
+  await parseResponse(response, "Failed to delete supplier");
+}
+
 export async function uploadSupplierImage(file) {
   const formData = new FormData();
   formData.append("image", file);

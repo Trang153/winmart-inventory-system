@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import AppSidebar from "../../../components/AppSidebar";
+import RoleAvatar from "../../../components/RoleAvatar";
 import {
   createSupplier,
   getSupplierDetail,
@@ -7,6 +9,7 @@ import {
   updateSupplier,
   uploadSupplierImage,
 } from "../../../services/supplier/supplierService";
+import { isAdmin } from "../../../auth/rbac";
 
 const navItems = [
   { page: "dashboard", label: "Dashboard", icon: "#" },
@@ -15,7 +18,6 @@ const navItems = [
   { page: "inventory", label: "Inventory", icon: "[]" },
   { page: "orders", label: "Orders", icon: "U" },
   { page: "reports", label: "Reports", icon: "|" },
-  { page: "rating", label: "Rating", icon: "/" },
 ];
 
 const categoryOptions = ["Snacks", "Dairy", "Drinks", "Frozen Food", "Household"];
@@ -24,7 +26,7 @@ const styles = {
   page: {
     minHeight: "100vh",
     display: "grid",
-    gridTemplateColumns: "260px 1fr",
+    gridTemplateColumns: "322px 1fr",
     background: "#f5f7fb",
     color: "#2f3747",
     fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
@@ -389,11 +391,13 @@ function Sidebar({ currentPage, onNavigate, onLogout }) {
   );
 }
 
-function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogout = () => {} }) {
+function AddSupplier({ currentPage = "suppliers", currentUser = null, onNavigate = () => {}, onLogout = () => {} }) {
   const fileInputRef = useRef(null);
   const [searchParams] = useSearchParams();
   const supplierId = searchParams.get("id");
   const isDetailMode = Boolean(supplierId);
+  const canManageSuppliers = isAdmin(currentUser);
+  const isReadOnly = !canManageSuppliers;
   const [supplierRows, setSupplierRows] = useState([]);
   const [supplierName, setSupplierName] = useState("");
   const [category, setCategory] = useState("");
@@ -477,6 +481,10 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
   }, [supplierId]);
 
   async function handleSubmitSupplier() {
+    if (isReadOnly) {
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMessage("");
@@ -514,6 +522,10 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
   }
 
   async function handleImageChange(event) {
+    if (isReadOnly) {
+      return;
+    }
+
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -578,7 +590,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
       </style>
 
       <div className="add-supplier-page" style={styles.page}>
-        <Sidebar currentPage={currentPage} onNavigate={onNavigate} onLogout={onLogout} />
+        <AppSidebar currentPage={currentPage} currentUser={currentUser} onNavigate={onNavigate} onLogout={onLogout} />
 
         <main style={styles.main}>
           <header className="add-supplier-topbar" style={styles.topbar}>
@@ -589,7 +601,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
 
             <div style={styles.topbarRight}>
               <span>!</span>
-              <div style={styles.avatar}>U</div>
+              <RoleAvatar currentUser={currentUser} style={styles.avatar} />
             </div>
           </header>
 
@@ -640,7 +652,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                               style={styles.actionLink}
                               onClick={() => onNavigate(`/suppliers/new?id=${supplier.supplier_id}`)}
                             >
-                              View / Edit
+                              {canManageSuppliers ? "View / Edit" : "View"}
                             </button>
                           </td>
                         </tr>
@@ -686,7 +698,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                           ...styles.browseText,
                         }}
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={isLoadingDetail || isUploadingImage}
+                        disabled={isLoadingDetail || isUploadingImage || isReadOnly}
                       >
                         Browse image
                       </button>
@@ -696,7 +708,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                         accept="image/*"
                         style={{ display: "none" }}
                         onChange={handleImageChange}
-                        disabled={isLoadingDetail || isUploadingImage}
+                        disabled={isLoadingDetail || isUploadingImage || isReadOnly}
                       />
                       {imageUrl ? (
                         <div style={{ fontSize: "12px", marginTop: "8px", wordBreak: "break-all" }}>
@@ -717,7 +729,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                       style={styles.input}
                       value={supplierName}
                       onChange={(event) => setSupplierName(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     />
                   </div>
 
@@ -744,7 +756,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                       value={category}
                       style={styles.select}
                       onChange={(event) => setCategory(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     >
                       <option value="">
                         Select product category
@@ -768,7 +780,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                       style={styles.input}
                       value={totalOrderValue}
                       onChange={(event) => setTotalOrderValue(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     />
                   </div>
 
@@ -783,7 +795,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                       style={styles.input}
                       value={contactInfo}
                       onChange={(event) => setContactInfo(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     />
                   </div>
 
@@ -798,7 +810,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                       style={styles.input}
                       value={contactInfo}
                       onChange={(event) => setContactInfo(event.target.value)}
-                      disabled={isLoadingDetail}
+                      disabled={isLoadingDetail || isReadOnly}
                     />
                   </div>
 
@@ -812,7 +824,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                           ...(returnPolicy === "accept" ? styles.policyButtonActive : null),
                         }}
                         onClick={() => setReturnPolicy("accept")}
-                        disabled={isLoadingDetail}
+                        disabled={isLoadingDetail || isReadOnly}
                       >
                         Accept
                         <br />
@@ -825,7 +837,7 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                           ...(returnPolicy === "no-return" ? styles.policyButtonActive : null),
                         }}
                         onClick={() => setReturnPolicy("no-return")}
-                        disabled={isLoadingDetail}
+                        disabled={isLoadingDetail || isReadOnly}
                       >
                         No return
                       </button>
@@ -839,13 +851,15 @@ function AddSupplier({ currentPage = "suppliers", onNavigate = () => {}, onLogou
                   <button type="button" style={styles.discardButton} onClick={() => onNavigate("suppliers")}>
                     Discard
                   </button>
-                  <button type="button" style={styles.primaryButton} onClick={handleSubmitSupplier} disabled={isSubmitting || isLoadingDetail}>
-                    {isSubmitting
-                      ? "Saving..."
-                      : isDetailMode
-                        ? "Update Supplier"
-                        : "Add Supplier"}
-                  </button>
+                  {canManageSuppliers ? (
+                    <button type="button" style={styles.primaryButton} onClick={handleSubmitSupplier} disabled={isSubmitting || isLoadingDetail}>
+                      {isSubmitting
+                        ? "Saving..."
+                        : isDetailMode
+                          ? "Update Supplier"
+                          : "Add Supplier"}
+                    </button>
+                  ) : null}
                 </div>
               </section>
             </div>

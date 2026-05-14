@@ -10,8 +10,9 @@ import AddProductPage from "../features/products/pages/AddProduct";
 import InventoryPage from "../features/inventory/pages/InventoryPage";
 import OrdersPage from "../features/orders/pages/OrdersPage";
 import ReportsPage from "../features/reports/pages/ReportsPage";
-import RatingPage from "../features/rating/pages/RatingPage";
 import SettingsPage from "../features/settings/pages/SettingsPage";
+import UsersPage from "../features/users/pages/UsersPage";
+import { canAccessPage } from "../auth/rbac";
 
 function ProtectedRoute({ isAuthenticated, currentUser }) {
   if (!isAuthenticated || !currentUser) {
@@ -21,10 +22,18 @@ function ProtectedRoute({ isAuthenticated, currentUser }) {
   return <Outlet />;
 }
 
+function RoleProtectedPage({ page, currentUser, children }) {
+  if (!canAccessPage(currentUser, page)) {
+    return <Navigate to={appRoutes.dashboard} replace />;
+  }
+
+  return children;
+}
+
 function RoutedFeaturePage({ Component, currentPage, currentUser, onLogout }) {
   const navigate = useNavigate();
 
-  return (
+  const pageElement = (
     <Component
       currentPage={currentPage}
       currentUser={currentUser}
@@ -37,6 +46,12 @@ function RoutedFeaturePage({ Component, currentPage, currentUser, onLogout }) {
         navigate(nextRoute);
       }}
     />
+  );
+
+  return (
+    <RoleProtectedPage page={currentPage} currentUser={currentUser}>
+      {pageElement}
+    </RoleProtectedPage>
   );
 }
 
@@ -99,16 +114,20 @@ export function createAppRouter({ isAuthenticated, currentUser, onLogin, onLogou
           element: <RoutedFeaturePage Component={OrdersPage} currentPage="orders" currentUser={currentUser} onLogout={onLogout} />,
         },
         {
+          path: appRoutes.procurement,
+          element: <RoutedFeaturePage Component={(props) => <OrdersPage {...props} pageMode="procurement" />} currentPage="procurement" currentUser={currentUser} onLogout={onLogout} />,
+        },
+        {
           path: appRoutes.reports,
           element: <RoutedFeaturePage Component={ReportsPage} currentPage="reports" currentUser={currentUser} onLogout={onLogout} />,
         },
         {
-          path: appRoutes.rating,
-          element: <RoutedFeaturePage Component={RatingPage} currentPage="rating" currentUser={currentUser} onLogout={onLogout} />,
-        },
-        {
           path: appRoutes.settings,
           element: <RoutedFeaturePage Component={SettingsPage} currentPage="settings" currentUser={currentUser} onLogout={onLogout} />,
+        },
+        {
+          path: appRoutes.users,
+          element: <RoutedFeaturePage Component={UsersPage} currentPage="users" currentUser={currentUser} onLogout={onLogout} />,
         },
       ],
     },

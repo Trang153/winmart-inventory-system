@@ -1,4 +1,6 @@
 import React from "react";
+import AppSidebar from "../../../components/AppSidebar";
+import RoleAvatar from "../../../components/RoleAvatar";
 
 const navItems = [
   { label: "Dashboard", icon: "#", page: "dashboard" },
@@ -7,11 +9,10 @@ const navItems = [
   { label: "Inventory", icon: "[]", page: "inventory" },
   { label: "Orders", icon: "U", page: "orders" },
   { label: "Reports", icon: "|", page: "reports" },
-  { label: "Rating", icon: "/", page: "rating" },
 ];
 
 const styles = {
-  page: { minHeight: "100vh", display: "grid", gridTemplateColumns: "274px 1fr", background: "#f5f7fb", fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif', color: "#1f2937" },
+  page: { minHeight: "100vh", display: "grid", gridTemplateColumns: "322px 1fr", background: "#f5f7fb", fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif', color: "#1f2937" },
   sidebar: { background: "#ffffff", borderRight: "1px solid #dfe7f2", padding: "22px 14px", display: "flex", flexDirection: "column" },
   brand: { margin: "12px 18px 40px", color: "#d14134", fontSize: "34px", fontWeight: 800, letterSpacing: "-1px" },
   nav: { display: "flex", flexDirection: "column", gap: "10px" },
@@ -40,7 +41,7 @@ const styles = {
   toggleCircle: { width: "22px", height: "22px", borderRadius: "50%", background: "#ffffff", position: "absolute", right: "2px", top: "2px" },
 };
 
-function Settings({ currentPage = "settings", onNavigate = () => {}, onLogout = () => {} }) {
+function Settings({ currentPage = "settings", currentUser = null, onNavigate = () => {}, onLogout = () => {} }) {
   return (
     <>
       <style>
@@ -72,29 +73,7 @@ function Settings({ currentPage = "settings", onNavigate = () => {}, onLogout = 
       </style>
 
       <div className="settings-page" style={styles.page}>
-        <aside style={styles.sidebar}>
-          <div style={styles.brand}>WinMart</div>
-
-          <nav style={styles.nav}>
-            {navItems.map((item) => (
-              <button key={item.label} style={styles.navItem} onClick={() => item.page && onNavigate(item.page)}>
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div style={styles.footer}>
-            <button style={{ ...styles.navItem, ...styles.navItemActive }}>
-              <span>*</span>
-              <span>Settings</span>
-            </button>
-            <button type="button" style={{ ...styles.navItem, color: "#ef4335" }} onClick={onLogout}>
-              <span>-</span>
-              <span>Log Out</span>
-            </button>
-          </div>
-        </aside>
+        <AppSidebar currentPage={currentPage} currentUser={currentUser} onNavigate={onNavigate} onLogout={onLogout} />
 
         <main style={styles.main}>
           <header className="settings-topbar" style={styles.topbar}>
@@ -105,7 +84,7 @@ function Settings({ currentPage = "settings", onNavigate = () => {}, onLogout = 
 
             <div style={styles.topActions}>
               <span>!</span>
-              <div style={styles.avatar}>U</div>
+              <RoleAvatar currentUser={currentUser} style={styles.avatar} />
             </div>
           </header>
 
@@ -177,7 +156,7 @@ function Settings({ currentPage = "settings", onNavigate = () => {}, onLogout = 
 
               <div style={styles.field}>
                 <label style={styles.label}>Currency</label>
-                <select style={styles.select} defaultValue="USD ($)"><option>USD ($)</option></select>
+                <select style={styles.select} defaultValue="VND"><option>VND</option></select>
               </div>
 
               <div style={styles.field}>
