@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getOrderReport } from "../../../services/order/orderService";
+import { exportOrderReport, getOrderReport } from "../../../services/order/orderService";
 import AppSidebar from "../../../components/AppSidebar";
 import RoleAvatar from "../../../components/RoleAvatar";
 import { getRoleName } from "../../../auth/rbac";
@@ -103,6 +103,7 @@ function Reports({ currentPage = "reports", currentUser = null, onNavigate = () 
   const [report, setReport] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [exportingFormat, setExportingFormat] = useState("");
   const roleName = getRoleName(currentUser).toLowerCase();
   const isStaff = roleName === "staff";
 
@@ -177,6 +178,28 @@ function Reports({ currentPage = "reports", currentUser = null, onNavigate = () 
     ? new Date(report.updated_at).toLocaleString("en-US")
     : "";
 
+  async function handleExport(format) {
+    try {
+      setExportingFormat(format);
+      setErrorMessage("");
+
+      const { blob, filename } = await exportOrderReport(format);
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      setErrorMessage(error.message || "Failed to export report");
+    } finally {
+      setExportingFormat("");
+    }
+  }
+
   return (
     <>
       <style>
@@ -244,13 +267,13 @@ function Reports({ currentPage = "reports", currentUser = null, onNavigate = () 
               </div>
 
               <div style={styles.headerActions}>
-                <button type="button" style={styles.secondaryButton}>
+                <button type="button" style={styles.secondaryButton} onClick={() => handleExport("excel")} disabled={Boolean(exportingFormat)}>
                   <span>[]</span>
-                  <span>Export Excel</span>
+                  <span>{exportingFormat === "excel" ? "Exporting..." : "Export Excel"}</span>
                 </button>
-                <button type="button" style={styles.secondaryButton}>
+                <button type="button" style={styles.secondaryButton} onClick={() => handleExport("pdf")} disabled={Boolean(exportingFormat)}>
                   <span>[]</span>
-                  <span>Export PDF</span>
+                  <span>{exportingFormat === "pdf" ? "Exporting..." : "Export PDF"}</span>
                 </button>
               </div>
             </div>
@@ -311,13 +334,13 @@ function Reports({ currentPage = "reports", currentUser = null, onNavigate = () 
 
             <div className="reports-three-cols" style={styles.threeCols}>
               <section style={styles.miniCard}>
-                <div style={styles.miniHeader}>Các sản phẩm bán chạy</div>
+                <div style={styles.miniHeader}>Top Selling Products</div>
                 <div style={styles.miniBody}>
                   {displayTopProducts.map((item) => (
                     <div key={item.name} style={styles.listItem}>
                       <span style={styles.primaryText}>{item.name}</span>
                       <span style={styles.secondaryText}>
-                        Đã bán: {item.sold} • Doanh thu: {item.revenue}
+                        Sold: {item.sold} - Revenue: {item.revenue}
                       </span>
                     </div>
                   ))}
@@ -326,14 +349,14 @@ function Reports({ currentPage = "reports", currentUser = null, onNavigate = () 
               </section>
 
               <section style={styles.miniCard}>
-                <div style={styles.miniHeader}>Báo cáo tồn kho</div>
+                <div style={styles.miniHeader}>Inventory Report</div>
                 <div style={styles.miniBody}>
                   {displayInventoryReport.map((item) => (
                     <div key={item.category} style={styles.row}>
                       <div>
                         <div style={styles.primaryText}>{item.category}</div>
                         <div style={styles.secondaryText}>
-                          {item.items} sản phẩm • {item.value}
+                          {item.items} products - {item.value}
                         </div>
                       </div>
                       <span
@@ -354,14 +377,14 @@ function Reports({ currentPage = "reports", currentUser = null, onNavigate = () 
               </section>
 
               <section style={styles.miniCard}>
-                <div style={styles.miniHeader}>Báo cáo bán hàng</div>
+                <div style={styles.miniHeader}>Sales Report</div>
                 <div style={styles.miniBody}>
                   {displaySalesReport.map((item) => (
                     <div key={item.channel} style={styles.row}>
                       <div>
                         <div style={styles.primaryText}>{item.channel}</div>
                         <div style={styles.secondaryText}>
-                          {item.orders} đơn • {item.revenue}
+                          {item.orders} orders - {item.revenue}
                         </div>
                       </div>
                       <span style={styles.trend}>Live</span>

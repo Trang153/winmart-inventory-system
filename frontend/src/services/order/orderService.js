@@ -47,6 +47,32 @@ export async function getOrderReport() {
   return data.data;
 }
 
+export async function exportOrderReport(format = "csv") {
+  const response = await apiRequest(`/api/orders/report/export?format=${encodeURIComponent(format)}`);
+
+  if (!response.ok) {
+    let message = "Failed to export order report";
+
+    try {
+      const data = await response.json();
+      message = data.message || message;
+    } catch (_error) {
+      // Keep the fallback message when the backend does not return JSON.
+    }
+
+    throw new Error(message);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+
+  return {
+    blob,
+    filename: filenameMatch?.[1] || `order-report.${format === "pdf" ? "pdf" : format === "excel" ? "xls" : "csv"}`,
+  };
+}
+
 export async function getDashboardSummary() {
   const response = await apiRequest("/api/orders/dashboard-summary");
   const data = await parseResponse(response, "Failed to fetch dashboard summary");

@@ -369,6 +369,212 @@ async function getOrderReport(currentUser = null) {
   };
 }
 
+function formatVnd(value) {
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Number(value || 0))} VND`;
+}
+
+function escapeCsvValue(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function buildReportRows(report) {
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  return [
+    ["Report Scope", report.scope === "staff" ? "Staff Report" : "Admin Report"],
+    ["Updated At", report.updated_at],
+    [],
+    ["Summary"],
+    ["Metric", "Value"],
+    ["Total Revenue", formatVnd(report.summary.total_revenue)],
+    ["Total Orders", report.summary.total_orders],
+    ["Inventory Value", formatVnd(report.summary.inventory_value)],
+    ["Low Stock Alerts", report.summary.low_stock_count],
+    [],
+    ["Monthly Revenue"],
+    ["Month", "Revenue"],
+    ...monthLabels.map((month, index) => [month, formatVnd(report.monthly_revenue[index])]),
+    [],
+    ["Top Selling Products"],
+    ["Product", "Sold", "Revenue"],
+    ...report.top_products.map((item) => [item.name, item.sold, formatVnd(item.revenue)]),
+    [],
+    ["Inventory By Category"],
+    ["Category", "Items", "Value", "Status"],
+    ...report.inventory_by_category.map((item) => [item.category, item.items, formatVnd(item.value), item.status]),
+    [],
+    ["Sales By Status"],
+    ["Status", "Orders", "Revenue"],
+    ...report.sales_report.map((item) => [item.channel, item.orders, formatVnd(item.revenue)]),
+  ];
+}
+
+function buildOrderReportCsv(report) {
+  const rows = buildReportRows(report);
+  return `\uFEFF${rows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n")}\r\n`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildOrderReportExcel(report) {
+  const rows = buildReportRows(report);
+  const tableRows = rows.map((row) => {
+    if (!row.length) {
+      return "<tr><td colspan=\"4\"></td></tr>";
+    }
+
+    return `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`;
+  });
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    table { border-collapse: collapse; font-family: Arial, sans-serif; }
+    td { border: 1px solid #d9d9d9; padding: 6px 10px; }
+  </style>
+</head>
+<body>
+  <table>${tableRows.join("")}</table>
+</body>
+</html>`;
+}
+
+function toPdfText(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7E]/g, "?")
+    .replace(/[\\()]/g, "\\$&");
+}
+
+function wrapPdfLine(line, maxLength = 92) {
+  const words = String(line).split(" ");
+  const lines = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+
+    if (nextLine.length > maxLength && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+      return;
+    }
+
+    currentLine = nextLine;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.length ? lines : [""];
+}
+
+function buildOrderReportPdf(report) {
+  const sourceLines = buildReportRows(report).flatMap((row) => {
+    if (!row.length) {
+      return [""];
+    }
+
+    if (row.length === 1) {
+      return [`${row[0]}`];
+    }
+
+    return [row.join(" | ")];
+  });
+  const lines = sourceLines.flatMap((line) => wrapPdfLine(line));
+  const linesPerPage = 42;
+  const pages = [];
+
+  for (let index = 0; index < lines.length; index += linesPerPage) {
+    pages.push(lines.slice(index, index + linesPerPage));
+  }
+
+  const objects = [];
+  const addObject = (content) => {
+    objects.push(content);
+    return objects.length;
+  };
+
+  const catalogId = addObject("<< /Type /Catalog /Pages 2 0 R >>");
+  const pagesId = addObject("");
+  const fontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const pageIds = [];
+
+  pages.forEach((pageLines) => {
+    const content = [
+      "BT",
+      "/F1 10 Tf",
+      "50 790 Td",
+      "14 TL",
+      ...pageLines.map((line, index) => `${index === 0 ? "" : "T* "}${`(${toPdfText(line)}) Tj`}`.trim()),
+      "ET",
+    ].join("\n");
+    const contentId = addObject(`<< /Length ${Buffer.byteLength(content, "ascii")} >>\nstream\n${content}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    pageIds.push(pageId);
+  });
+
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+
+  objects.forEach((content, index) => {
+    offsets.push(Buffer.byteLength(pdf, "ascii"));
+    pdf += `${index + 1} 0 obj\n${content}\nendobj\n`;
+  });
+
+  const xrefOffset = Buffer.byteLength(pdf, "ascii");
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += "0000000000 65535 f \n";
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return Buffer.from(pdf, "ascii");
+}
+
+async function exportOrderReport(currentUser = null, format = "csv") {
+  const normalizedFormat = String(format || "csv").toLowerCase();
+  const report = await getOrderReport(currentUser);
+  const scope = report.scope === "staff" ? "staff" : "admin";
+  const timestamp = new Date().toISOString().slice(0, 10);
+
+  if (normalizedFormat === "pdf") {
+    return {
+      buffer: buildOrderReportPdf(report),
+      contentType: "application/pdf",
+      filename: `${scope}-order-report-${timestamp}.pdf`,
+    };
+  }
+
+  if (normalizedFormat === "excel" || normalizedFormat === "xls") {
+    return {
+      buffer: Buffer.from(buildOrderReportExcel(report), "utf8"),
+      contentType: "application/vnd.ms-excel; charset=utf-8",
+      filename: `${scope}-order-report-${timestamp}.xls`,
+    };
+  }
+
+  return {
+    buffer: Buffer.from(buildOrderReportCsv(report), "utf8"),
+    contentType: "text/csv; charset=utf-8",
+    filename: `${scope}-order-report-${timestamp}.csv`,
+  };
+}
+
 async function getDashboardSummary() {
   const salesOrderCondition = `
     (o.order_type IS NULL OR o.order_type NOT LIKE '%Purchase%')
@@ -1185,6 +1391,7 @@ module.exports = {
   getNextOrderCode,
   getDiscountCodes,
   getOrderReport,
+  exportOrderReport,
   getDashboardSummary,
   searchCustomers,
   createOrder,

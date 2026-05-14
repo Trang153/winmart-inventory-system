@@ -97,6 +97,23 @@ async function getOrderReport(req, res) {
   }
 }
 
+async function exportOrderReport(req, res) {
+  try {
+    const exportedReport = await orderService.exportOrderReport(req.user, req.query.format);
+
+    res.setHeader("Content-Type", exportedReport.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${exportedReport.filename}"`);
+
+    return res.send(exportedReport.buffer);
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to export order report",
+      error: error.message,
+    });
+  }
+}
+
 async function getDashboardSummary(_req, res) {
   try {
     const summary = await orderService.getDashboardSummary();
@@ -209,6 +226,7 @@ module.exports = {
   getNextOrderCode,
   getDiscountCodes,
   getOrderReport,
+  exportOrderReport,
   getDashboardSummary,
   searchCustomers,
   createOrder,

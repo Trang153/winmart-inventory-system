@@ -8,6 +8,7 @@ router.get("/", orderController.getAllOrders);
 router.get("/next-code", orderController.getNextOrderCode);
 router.get("/discount-codes", orderController.getDiscountCodes);
 router.get("/report", orderController.getOrderReport);
+router.get("/report/export", orderController.exportOrderReport);
 router.get("/dashboard-summary", orderController.getDashboardSummary);
 router.get("/customers", orderController.searchCustomers);
 router.get("/:id", orderController.getOrderById);
