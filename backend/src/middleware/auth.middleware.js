@@ -33,7 +33,7 @@ function requireRoles(allowedRoles = []) {
     if (!normalizedRoles.includes(roleName)) {
       return res.status(403).json({
         success: false,
-        message: "You do not have permission to access this resource",
+        message: "You don't have permission to access this resource",
       });
     }
 
