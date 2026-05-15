@@ -799,7 +799,7 @@ function AdminInventory({ currentPage = "inventory", currentUser = null, onNavig
                               rel="noreferrer"
                               style={{ ...styles.smallButton, display: "inline-flex", alignItems: "center", textDecoration: "none" }}
                             >
-                              View Bill
+                              View Invoice
                             </a>
                           ) : (
                             request.invoice_image_url || "-"
@@ -983,7 +983,7 @@ function AdminInventory({ currentPage = "inventory", currentUser = null, onNavig
                 <button type="button" style={styles.secondaryButton} onClick={closeStockModal}>Cancel</button>
                 <button type="button" style={styles.primaryButton} onClick={confirmStockUpdate} disabled={isUpdatingStock}>
                   {isUpdatingStock ? "Saving..." : "Confirm"}
-                </button>
+                  </button>
               </div>
             </div>
           </div>
